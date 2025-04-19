@@ -23,3 +23,11 @@ const port = process.env.PORT || 3000;
 app.listen(port, () => {
   console.log(`App running on Port ${port}`);
 });
+
+process.on("uncaughtException", (err) => {
+  console.log(`uncaughtException error: ${err.name}|${err.message}`);
+  port.close(() => {
+    console.log("Shutting Down The Server....");
+    process.exit(1);
+  });
+});
