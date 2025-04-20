@@ -35,7 +35,7 @@
     "prettier": "^3.3.3"
   },
   "scripts": {
-    "start": "nodemon server.js"
+    "start": "nodemon index.js"
   },
   "name": "turjuman",
   "version": "1.0.0",
