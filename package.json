@@ -35,7 +35,12 @@
     "prettier": "^3.3.3"
   },
   "scripts": {
-    "start": "nodemon index.js"
+    "start": "nodemon index.js",
+    "start:dev": "nodemon index.js",
+    "start:prod": "NODE_ENV=producation node index.js"
+  },
+  "engines": {
+    "node": "20.x"
   },
   "name": "turjuman",
   "version": "1.0.0",
