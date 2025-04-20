@@ -51,7 +51,9 @@ app.use((req, res, next) => {
   req.requestTime = new Date().toISOString();
   next();
 });
-
+app.get("/", (req, res) => {
+  res.send("Welcome to Turjuman API 🚀");
+});
 app.use("/api/v1/users", userRouter);
 app.use("/api/v1/", translateRouter);
 app.use("/api/v1/payment", paymentRouter);

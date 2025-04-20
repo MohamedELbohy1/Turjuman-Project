@@ -13,9 +13,6 @@ mongoose
     process.exit(1);
   });
 
-app.get("/", (req, res) => {
-  res.send("Welcome to Turjuman API 🚀");
-});
 //mongoose.connect(process.env.DATABASE_LOCAL,{
 // mongoose
 //   .connect(DB, {
