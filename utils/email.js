@@ -28,21 +28,21 @@ module.exports = class Email {
     }
   }
 
-  async sendPasswordReset() {
-    await this.send("d-0d8fe808f3e24fa28007e730bb526b47", {
-      first_name: this.firstName,
-      url: this.url,
-      unsubscribe: `https://turjuman.vercel.app/unsubscribe?email=${this.to}`,
-      unsubscribe_preferences: "https://turjuman.vercel.app/preferences",
-    });
-  }
+  // async sendPasswordReset() {
+  //   await this.send("d-0d8fe808f3e24fa28007e730bb526b47", {
+  //     first_name: this.firstName,
+  //     url: this.url,
+  //     unsubscribe: `https://turjuman.vercel.app/unsubscribe?email=${this.to}`,
+  //     unsubscribe_preferences: "https://turjuman.vercel.app/preferences",
+  //   });
+  // }
 
-  async sendWelcome() {
-    await this.send("d-3f1136812d5d4f5aac4322f05a8a89d8", {
-      first_name: this.firstName,
-      url: this.url,
-      unsubscribe: `https://turjuman.vercel.app/unsubscribe?email=${this.to}`,
-      unsubscribe_preferences: "https://turjuman.vercel.app/preferences",
-    });
-  }
+  // async sendWelcome() {
+  //   await this.send("d-3f1136812d5d4f5aac4322f05a8a89d8", {
+  //     first_name: this.firstName,
+  //     url: this.url,
+  //     unsubscribe: `https://turjuman.vercel.app/unsubscribe?email=${this.to}`,
+  //     unsubscribe_preferences: "https://turjuman.vercel.app/preferences",
+  //   });
+  // }
 };
