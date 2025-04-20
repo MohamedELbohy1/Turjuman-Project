@@ -13,8 +13,8 @@ mongoose
     process.exit(1);
   });
 
-app.get("/test", (req, res) => {
-  res.json({ msg: "Hello From Mohamed ELbohy" });
+app.get("/", (req, res) => {
+  res.send("Welcome to Turjuman API 🚀");
 });
 //mongoose.connect(process.env.DATABASE_LOCAL,{
 // mongoose
