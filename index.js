@@ -13,6 +13,9 @@ mongoose
     process.exit(1);
   });
 
+app.get("/test", (req, res) => {
+  res.json({ msg: "Hello From Mohamed ELbohy" });
+});
 //mongoose.connect(process.env.DATABASE_LOCAL,{
 // mongoose
 //   .connect(DB, {
