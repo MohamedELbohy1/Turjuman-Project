@@ -37,7 +37,7 @@
     "prettier": "^3.3.3"
   },
   "scripts": {
-    "start": "nodemon index.js",
+    "start": "node index.js",
     "start:dev": "nodemon index.js",
     "start:prod": "NODE_ENV=producation node index.js"
   },

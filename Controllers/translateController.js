@@ -84,45 +84,6 @@ exports.checkTranslationLimit = catchAsync(async (req, res, next) => {
   next();
 });
 
-const suggestSimilarTranslations = async (newTranslation) => {
-  const potentialTranslations = await savedTransModel
-    .find({
-      srcLang: newTranslation.srcLang,
-      targetLang: newTranslation.targetLang,
-      _id: { $ne: newTranslation._id },
-    })
-    .select("word translation");
-
-  const similarityPromises = potentialTranslations.map(async (trans) => {
-    try {
-      const prompt = `
-        Compare the semantic similarity between the following two words in the context of translation from ${newTranslation.srcLang} to ${newTranslation.targetLang}. Respond with a JSON object {"similar": true/false, "reason": "short explanation"}.
-
-        Word 1: ${newTranslation.word}
-        Word 2: ${trans.word}
-      `;
-      const result = await model.generateContent(prompt);
-      const rawJson = await result.response.text();
-      const json = parseGeminiJson(rawJson);
-      if (json.similar) {
-        return {
-          ...trans._doc,
-          similarityReason: json.reason,
-        };
-      }
-    } catch (err) {
-      console.error(
-        `Error comparing ${newTranslation.word} with ${trans.word}:`,
-        err.message
-      );
-    }
-    return null;
-  });
-
-  const allResults = await Promise.all(similarityPromises);
-  return allResults.filter((res) => res !== null).slice(0, 5);
-};
-
 exports.translateAndSave = catchAsync(async (req, res, next) => {
   let { word, paragraph, srcLang, targetLang, isFavorite = false } = req.body;
 
@@ -253,8 +214,6 @@ exports.translateAndSave = catchAsync(async (req, res, next) => {
     synonyms_target: translationData.synonyms_target,
   });
 
-  const similarTranslations = await suggestSimilarTranslations(savedTrans);
-
   const dictionaryData = {
     definition: translationData.definition,
     examples: translationData.examples,
@@ -296,7 +255,6 @@ exports.translateAndSave = catchAsync(async (req, res, next) => {
       original: word,
       translation,
       ...dictionaryData,
-      similarTranslations,
       savedTranslation: savedTrans,
     },
   });
