@@ -2,17 +2,20 @@ const mongoose = require("mongoose");
 
 const savedTransSchema = new mongoose.Schema(
   {
-    text: {
+    word: {
       type: String,
     },
     translation: {
       type: String,
       required: true,
     },
-    fromLang: {
+    paragraph: {
       type: String,
     },
-    toLang: {
+    srcLang: {
+      type: String,
+    },
+    targetLang: {
       type: String,
     },
     createdAt: {
@@ -29,11 +32,13 @@ const savedTransSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    definition: String,
+    synonyms_src: [String],
+    synonyms_target: [String],
   },
   { timestamps: true }
 );
-
-savedTransSchema.index({ translation: "text" });
+savedTransSchema.index({ word: "text" });
 
 const savedTransModel = mongoose.model("savedTrans", savedTransSchema);
 

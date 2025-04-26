@@ -15,11 +15,12 @@ router.post(
 
 router.use(authController.protect);
 
-router.get("/Home", translateController.searchAndFilterTranslations);
+router.get("/Home", translateController.userTanslations);
 router.get("/alltranslations", translateController.getalltranslations);
 router.get("/getTranslationsById/:id", translateController.getUserTranslation);
 router.get("/favorites/translates", translateController.getFavorites);
 router.get("/translations-History", translateController.getTranslationHistory);
+router.get("/favorite/:id", translateController.markAsFavoriteById);
 
 router.get("/favoriteOrder", translateController.getSorting);
 router.get(

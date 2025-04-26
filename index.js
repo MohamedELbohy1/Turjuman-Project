@@ -6,7 +6,7 @@ const app = require("./app");
 mongoose
   .connect(process.env.DATABASE)
   .then((con) => {
-    console.log("DB Connected Succssefly");
+    console.log("DB Connected Successfully");
   })
   .catch((err) => {
     console.log(`There was and error ${err}`);

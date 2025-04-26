@@ -1,11 +1,26 @@
+const redisClient = require("../utils/radisClient");
 const savedTransModel = require("../modules/savedTransModel");
 const catchAsync = require("express-async-handler");
 const AppError = require("./../utils/appError");
 const User = require("./../modules/userModel");
 const mongoose = require("mongoose");
-const translate = require("translate-google");
+// const translate = require("translate-google");
+const gemineiTranslate = require("../utils/geminiServce");
+const model = require("../utils/geminiModel");
 const session = require("express-session");
 
+const getCachedTranslation = async (hotKey, warmKey, coldKey) => {
+  const hot = await redisClient.get(hotKey);
+  if (hot) return JSON.parse(hot);
+
+  const warm = await redisClient.get(warmKey);
+  if (warm) return JSON.parse(warm);
+
+  const cold = await redisClient.get(coldKey);
+  if (cold) return JSON.parse(cold);
+
+  return null;
+};
 exports.checkTranslationLimit = catchAsync(async (req, res, next) => {
   if (!req.user) {
     return next();
@@ -70,136 +85,250 @@ exports.checkTranslationLimit = catchAsync(async (req, res, next) => {
 });
 
 const suggestSimilarTranslations = async (newTranslation) => {
-  const similarTranslations = await savedTransModel
+  const potentialTranslations = await savedTransModel
     .find({
-      $text: { $search: newTranslation.text },
-      fromLang: newTranslation.fromLang,
-      toLang: newTranslation.toLang,
+      srcLang: newTranslation.srcLang,
+      targetLang: newTranslation.targetLang,
       _id: { $ne: newTranslation._id },
     })
-    .select("text translation")
-    .limit(5);
-  return similarTranslations;
+    .select("word translation");
+
+  const similarityPromises = potentialTranslations.map(async (trans) => {
+    try {
+      const prompt = `
+        Compare the semantic similarity between the following two words in the context of translation from ${newTranslation.srcLang} to ${newTranslation.targetLang}. Respond with a JSON object {"similar": true/false, "reason": "short explanation"}.
+
+        Word 1: ${newTranslation.word}
+        Word 2: ${trans.word}
+      `;
+      const result = await model.generateContent(prompt);
+      const rawJson = await result.response.text();
+      const json = parseGeminiJson(rawJson);
+      if (json.similar) {
+        return {
+          ...trans._doc,
+          similarityReason: json.reason,
+        };
+      }
+    } catch (err) {
+      console.error(
+        `Error comparing ${newTranslation.word} with ${trans.word}:`,
+        err.message
+      );
+    }
+    return null;
+  });
+
+  const allResults = await Promise.all(similarityPromises);
+  return allResults.filter((res) => res !== null).slice(0, 5);
 };
 
 exports.translateAndSave = catchAsync(async (req, res, next) => {
-  const { text, fromLang, toLang, isFavorite = false } = req.body;
-  // Validate inputs
-  if (!text || !fromLang || !toLang) {
-    return next(new AppError("Please provide text, fromLang, and toLang", 400));
-  }
+  let { word, paragraph, srcLang, targetLang, isFavorite = false } = req.body;
 
-  const translations = await translate(text, { from: fromLang, to: toLang });
-
-  if (!translations) {
+  if (!word || !srcLang || !targetLang) {
     return next(
-      new AppError(
-        ` Translation from ${fromLang} to ${toLang} is not supported`,
-        400
-      )
+      new AppError("Please provide word, srcLang , and targetLang 😃", 400)
     );
   }
 
-  //   let result = translations[text.toLowerCase()]; // Direct match
-  //   if (!result) {
-  //     result = text
-  //       .split(" ") // Split text into words by space
-  //       .map((word) => translations[word.toLowerCase()] || word) // Translate each word or keep it as is
-  //       .join(" "); // Rejoin translated words into a sentence
-  //   }
+  const hotCacheKey = `hotcache:translation:${word}:${srcLang}:${targetLang}`;
+  const warmCacheKey = `warmcache:translation:${word}:${srcLang}:${targetLang}`;
+  const coldCacheKey = `coldcache:translation:${word}:${srcLang}:${targetLang}`;
+
+  const cachedTranslation = await getCachedTranslation(
+    hotCacheKey,
+    warmCacheKey,
+    coldCacheKey
+  );
+
+  if (cachedTranslation) {
+    return res.status(200).json({
+      success: true,
+      data: {
+        ...cachedTranslation,
+        source: cachedTranslation.source || "cache",
+      },
+    });
+  }
+
+  const translationData = await gemineiTranslate(
+    word,
+    paragraph,
+    srcLang,
+    targetLang
+  );
+
+  if (!translationData.success) {
+    if (translationData.error && translationData.error.includes("quota")) {
+      return res.status(503).json({
+        success: false,
+        message:
+          "⚠️ Translation service is temporarily unavailable due to rate limits. Please try again in a minute.",
+        error: translationData.error,
+        fallback: true,
+        details: translationData,
+      });
+    }
+
+    return res.status(500).json({
+      success: false,
+      message: translationData.error || "❌ Can't find a proper translation",
+      details: translationData,
+    });
+  }
+
+  const translation = translationData.translation;
   const userId = req.user ? req.user.id : null;
 
+  const GUEST_TRANSLATION_LIMIT = process.env.GUEST_LIMIT || 2;
   if (!userId) {
-    const GUEST_TRANSLATION_LIMIT = 2;
-    if (!req.session.guestTranslationCount) {
+    if (!req.session.guestTranslationCount)
       req.session.guestTranslationCount = 0;
-    }
 
     if (req.session.guestTranslationCount >= GUEST_TRANSLATION_LIMIT) {
       return res.status(403).json({
-        status: "fail",
+        success: false,
         message: `You have reached the maximum limit of ${GUEST_TRANSLATION_LIMIT} translations as a guest. Please log in for more translations.`,
       });
     }
 
     req.session.guestTranslationCount += 1;
     return res.status(200).json({
-      status: "success",
+      success: true,
       data: {
-        original: text,
-        translation: translations,
+        original: word,
+        translation,
         count: req.session.guestTranslationCount,
       },
     });
   }
 
+  const isSingleWord = word.trim().split(/\s+/).length === 1;
+
+  // ✅ Skip saving if not a single word
+  if (!isSingleWord) {
+    return res.status(200).json({
+      success: true,
+      data: {
+        original: word,
+        translation,
+        message: "Translation completed (not saved - full sentence)",
+      },
+    });
+  }
+
   const existingTranslation = await savedTransModel.findOne({
-    text,
-    fromLang,
-    toLang,
+    word,
+    srcLang,
+    targetLang,
     userId,
   });
 
   if (existingTranslation) {
     return res.status(200).json({
-      status: "success",
-      message: "Translation already saved",
+      success: true,
+      message: "Translation already exists",
       data: {
-        original: text,
+        original: word,
         translation: existingTranslation.translation,
         isFavorite: existingTranslation.isFavorite,
+        definition: translationData.definition,
+        examples: translationData.examples,
+        synonyms_src: translationData.synonyms_src,
+        synonyms_target: translationData.synonyms_target,
       },
     });
   }
 
-  // Save the new translation to the database
   const savedTrans = await savedTransModel.create({
-    text,
-    fromLang,
-    toLang,
-    translation: translations,
+    word,
+    srcLang,
+    targetLang,
+    translation,
     userId,
     isFavorite,
+    definition: translationData.definition,
+    synonyms_src: translationData.synonyms_src,
+    synonyms_target: translationData.synonyms_target,
   });
 
   const similarTranslations = await suggestSimilarTranslations(savedTrans);
 
-  // Respond with the translation and saved entry
+  const dictionaryData = {
+    definition: translationData.definition,
+    examples: translationData.examples,
+    synonyms_src: translationData.synonyms_src,
+    synonyms_target: translationData.synonyms_target,
+  };
+
+  await redisClient.set(
+    hotCacheKey,
+    JSON.stringify({
+      original: word,
+      translation,
+      ...dictionaryData,
+    }),
+    { EX: 3600 }
+  );
+  await redisClient.set(
+    warmCacheKey,
+    JSON.stringify({
+      original: word,
+      translation,
+      ...dictionaryData,
+    }),
+    { EX: 86400 }
+  );
+  await redisClient.set(
+    coldCacheKey,
+    JSON.stringify({
+      original: word,
+      translation,
+      ...dictionaryData,
+    }),
+    { EX: 604800 }
+  );
+
   res.status(200).json({
-    status: "success",
+    success: true,
     data: {
-      original: text,
-      translation: translations,
-      savedTranslation: savedTrans,
+      original: word,
+      translation,
+      ...dictionaryData,
       similarTranslations,
+      savedTranslation: savedTrans,
     },
   });
 });
 
 exports.getUserTranslation = catchAsync(async (req, res, next) => {
+  const { id } = req.params;
   const userId = req.user.id;
 
   // Find all saved translations for the logged-in user
-  const savedTrans = await savedTransModel.find({ userId });
+  const savedTrans = await savedTransModel.find({ userId, _id: id });
 
   // Format the response to include original text and its translation
   const translations = savedTrans.map((trans) => ({
-    originalText: trans.text,
+    id: trans._id,
+    originalText: trans.word,
     translation: trans.translation,
-    fromLang: trans.fromLang,
-    toLang: trans.toLang,
-    id: trans.id,
+    srcLang: trans.srcLang,
+    targetLang: trans.targetLang,
+    definition: trans.definition,
+    synonyms_src: trans.synonyms_src,
+    synonyms_target: trans.synonyms_target,
   }));
 
   res.status(200).json({
     status: "success",
-    count: translations.length,
     data: translations,
   });
 });
 
 exports.getalltranslations = catchAsync(async (req, res, next) => {
-  const translations = await savedTransModel.find();
+  const translations = await savedTransModel.find().sort({ createdAt: -1 });
 
   res.status(200).json({
     status: "success",
@@ -214,13 +343,22 @@ exports.getFavorites = catchAsync(async (req, res, next) => {
   const userId = req.user.id;
 
   // Find all saved translations for the logged-in user with favorites set to true
-  const favorites = await savedTransModel.find({ userId, isFavorite: true });
+  const favorites = await savedTransModel
+    .find({ userId, isFavorite: true })
+    .sort({ createdAt: -1 });
 
   // Format the response to include original text and its translation
   const favoriteTranslations = favorites.map((trans) => ({
     id: trans.id,
-    originalText: trans.text,
+    originalText: trans.word,
     translation: trans.translation,
+    srcLang: trans.srcLang,
+    targetLang: trans.targetLang,
+    isFavorite: trans.isFavorite,
+    createdAt: trans.createdAt,
+    definition: trans.definition,
+    synonyms_src: trans.synonyms_src,
+    synonyms_target: trans.synonyms_target,
   }));
 
   res.status(200).json({
@@ -379,21 +517,31 @@ exports.getSorting = catchAsync(async (req, res, next) => {
 
 exports.searchAndFilterTranslations = async (req, res) => {
   try {
-    const { keyword, fromLang, toLang, startDate, endDate, isFavorite } =
-      req.query;
+    const {
+      word,
+      paragraph,
+      srcLang,
+      targetLang,
+      startDate,
+      endDate,
+      isFavorite,
+    } = req.query;
 
     const query = { userId: req.user.id }; // Match only translations for the authenticated user
 
-    if (keyword) {
-      query.$text = { $search: keyword };
+    if (word) {
+      query.$text = { $search: word };
+    }
+    if (paragraph) {
+      query.$text = { $search: paragraph };
     }
 
-    if (fromLang) {
-      query.fromLang = fromLang; // Filter by source language
+    if (srcLang) {
+      query.srcLang = srcLang; // Filter by source language
     }
 
-    if (toLang) {
-      query.toLang = toLang; // Filter by target language
+    if (targetLang) {
+      query.targetLang = targetLang; // Filter by target language
     }
 
     if (startDate || endDate) {
@@ -420,3 +568,59 @@ exports.searchAndFilterTranslations = async (req, res) => {
     });
   }
 };
+
+////    The Function above but this userTranslations is simple      /////
+exports.userTanslations = async (req, res) => {
+  try {
+    const {
+      word,
+      paragraph,
+      srcLang,
+      targetLang,
+      startDate,
+      endDate,
+      isFavorite,
+    } = req.query;
+
+    const query = { userId: req.user.id };
+    const translations = await savedTransModel
+      .find(query)
+      .sort({ createdAt: -1 }); // من الأحدث للأقدم
+
+    res.status(200).json({
+      status: "success",
+      results: translations.length,
+      data: translations,
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ status: "error", message: "Server Error" });
+  }
+};
+
+exports.markAsFavoriteById = catchAsync(async (req, res, next) => {
+  const { id } = req.params;
+  const userId = req.user.id;
+
+  const translation = await savedTransModel
+    .findOne({
+      _id: id,
+      userId,
+    })
+    .sort({ createdAt: -1 });
+
+  if (!translation) {
+    return next(
+      new AppError("Translation not found or you don't have permission.", 404)
+    );
+  }
+
+  translation.isFavorite = true;
+  await translation.save();
+
+  res.status(200).json({
+    success: true,
+    message: "Translation marked as favorite ✅",
+    data: translation,
+  });
+});
