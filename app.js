@@ -62,6 +62,11 @@ app.use((req, res, next) => {
   req.requestTime = new Date().toISOString();
   next();
 });
+app.use("/api", (req, res, next) => {
+  res.setHeader("Content-Type", "application/json");
+  next();
+});
+
 app.get("/", (req, res) => {
   res.send("Welcome to Turjuman API 🚀");
 });
@@ -69,8 +74,12 @@ app.use("/api/v1/users", userRouter);
 app.use("/api/v1/", translateRouter);
 app.use("/api/v1/payment", paymentRouter);
 
-app.all("*", (req, res, next) => {
-  next(new AppErorr(`Cant find ${req.originalUrl} on this srever!`, 404));
+app.all("*", (req, res) => {
+  res.status(404).json({
+    status: "fail",
+    message: `Can't find ${req.originalUrl} on this server!`,
+  });
 });
+
 app.use(globalErrorHandler);
 module.exports = app;
