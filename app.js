@@ -4,7 +4,7 @@ const morgan = require("morgan");
 const app = express();
 const rateLimit = require("express-rate-limit");
 const AppErorr = require("./utils/appError");
-const cors = require("cors");
+// const cors = require("cors");
 const globalErrorHandler = require("./Controllers/errorController");
 const userRouter = require("./routes/userRoutes");
 const translateRouter = require("./routes/translateRoute");
@@ -43,7 +43,7 @@ app.use(compression());
 //   methods: "GET,HEAD,PUT,PATCH,POST,DELETE",
 //   allowedHeaders: "Content-Type,Authorization",
 // };
-app.use(cors(corsOptions));
+// app.use(cors(corsOptions));
 //Body Praser, reading from body from req.body
 app.use(express.json({ limit: "10kb" })); //Middleware
 app.use(express.urlencoded({ extended: true, limit: "10kb" }));
