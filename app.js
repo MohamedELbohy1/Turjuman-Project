@@ -37,12 +37,12 @@ app.post(
 app.use(compression());
 
 // 🌐 CORS Configuration
-const corsOptions = {
-  origin: ["https://turjuman-project-turjuman.vercel.app"],
-  credentials: true,
-  methods: "GET,HEAD,PUT,PATCH,POST,DELETE",
-  allowedHeaders: "Content-Type,Authorization",
-};
+// const corsOptions = {
+//   origin: ["https://turjuman-project-turjuman.vercel.app"],
+//   credentials: true,
+//   methods: "GET,HEAD,PUT,PATCH,POST,DELETE",
+//   allowedHeaders: "Content-Type,Authorization",
+// };
 app.use(cors(corsOptions));
 //Body Praser, reading from body from req.body
 app.use(express.json({ limit: "10kb" })); //Middleware
@@ -62,10 +62,10 @@ app.use((req, res, next) => {
   req.requestTime = new Date().toISOString();
   next();
 });
-app.use("/api", (req, res, next) => {
-  res.setHeader("Content-Type", "application/json");
-  next();
-});
+// app.use("/api", (req, res, next) => {
+//   res.setHeader("Content-Type", "application/json");
+//   next();
+// });
 
 app.get("/", (req, res) => {
   res.send("Welcome to Turjuman API 🚀");

@@ -13,7 +13,7 @@ router.post(
   translateController.translateAndSave
 );
 
-// router.use(authController.protect);
+router.use(authController.protect);
 
 router.get("/Home", translateController.userTanslations);
 router.get("/alltranslations", translateController.getalltranslations);
