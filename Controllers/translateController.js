@@ -6,7 +6,6 @@ const User = require("./../modules/userModel");
 const mongoose = require("mongoose");
 // const translate = require("translate-google");
 const gemineiTranslate = require("../utils/geminiServce");
-const model = require("../utils/geminiModel");
 const session = require("express-session");
 
 const getCachedTranslation = async (hotKey, warmKey, coldKey) => {
