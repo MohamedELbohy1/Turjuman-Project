@@ -9,18 +9,6 @@ const gemineiTranslate = require("../utils/geminiServce");
 const model = require("../utils/geminiModel");
 const session = require("express-session");
 
-const getCachedTranslation = async (hotKey, warmKey, coldKey) => {
-  const hot = await redisClient.get(hotKey);
-  if (hot) return JSON.parse(hot);
-
-  const warm = await redisClient.get(warmKey);
-  if (warm) return JSON.parse(warm);
-
-  const cold = await redisClient.get(coldKey);
-  if (cold) return JSON.parse(cold);
-
-  return null;
-};
 exports.checkTranslationLimit = catchAsync(async (req, res, next) => {
   if (!req.user) {
     return next();
