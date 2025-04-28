@@ -97,11 +97,14 @@ exports.translateAndSave = catchAsync(async (req, res, next) => {
   const warmCacheKey = `warmcache:translation:${word}:${srcLang}:${targetLang}`;
   const coldCacheKey = `coldcache:translation:${word}:${srcLang}:${targetLang}`;
 
+  // 🕒 مراقبة وقت الحصول على الترجمة من الـ Cache
+  console.time("Cache Check");
   const cachedTranslation = await getCachedTranslation(
     hotCacheKey,
     warmCacheKey,
     coldCacheKey
   );
+  console.timeEnd("Cache Check");
 
   if (cachedTranslation) {
     return res.status(200).json({
@@ -113,12 +116,15 @@ exports.translateAndSave = catchAsync(async (req, res, next) => {
     });
   }
 
+  // 🕒 مراقبة وقت الترجمة من Gemini
+  console.time("Gemini Translate");
   const translationData = await gemineiTranslate(
     word,
     paragraph,
     srcLang,
     targetLang
   );
+  console.timeEnd("Gemini Translate");
 
   if (!translationData.success) {
     if (translationData.error && translationData.error.includes("quota")) {
@@ -202,6 +208,8 @@ exports.translateAndSave = catchAsync(async (req, res, next) => {
     });
   }
 
+  // 🕒 مراقبة وقت حفظ الترجمة في قاعدة البيانات
+  console.time("Database Save");
   const savedTrans = await savedTransModel.create({
     word,
     srcLang,
@@ -213,6 +221,7 @@ exports.translateAndSave = catchAsync(async (req, res, next) => {
     synonyms_src: translationData.synonyms_src,
     synonyms_target: translationData.synonyms_target,
   });
+  console.timeEnd("Database Save");
 
   const dictionaryData = {
     definition: translationData.definition,
@@ -221,33 +230,38 @@ exports.translateAndSave = catchAsync(async (req, res, next) => {
     synonyms_target: translationData.synonyms_target,
   };
 
-  await redisClient.set(
-    hotCacheKey,
-    JSON.stringify({
-      original: word,
-      translation,
-      ...dictionaryData,
-    }),
-    { EX: 3600 }
-  );
-  await redisClient.set(
-    warmCacheKey,
-    JSON.stringify({
-      original: word,
-      translation,
-      ...dictionaryData,
-    }),
-    { EX: 86400 }
-  );
-  await redisClient.set(
-    coldCacheKey,
-    JSON.stringify({
-      original: word,
-      translation,
-      ...dictionaryData,
-    }),
-    { EX: 604800 }
-  );
+  // 🕒 استخدام العمليات غير المتزامنة لتخزين البيانات في Redis
+  await Promise.all([
+    redisClient.set(
+      hotCacheKey,
+      JSON.stringify({
+        original: word,
+        translation,
+        ...dictionaryData,
+      }),
+      { EX: 3600 }
+    ),
+
+    redisClient.set(
+      warmCacheKey,
+      JSON.stringify({
+        original: word,
+        translation,
+        ...dictionaryData,
+      }),
+      { EX: 86400 }
+    ),
+
+    redisClient.set(
+      coldCacheKey,
+      JSON.stringify({
+        original: word,
+        translation,
+        ...dictionaryData,
+      }),
+      { EX: 604800 }
+    ),
+  ]);
 
   res.status(200).json({
     success: true,
