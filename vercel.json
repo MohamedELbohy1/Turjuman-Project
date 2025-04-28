@@ -1,25 +1,15 @@
 {
-  "version": 2,
-  "builds": [
-    {
-      "src": "index.js",
-      "use": "@vercel/node"
-    }
-  ],
-  "routes": [
-    {
-      "src": "^/$",
-      "status": 307,
-      "headers": {
-        "Location": "/"
+    "version": 2,
+    "builds": [
+      {
+        "src": "index.js",
+        "use": "@vercel/node"
       }
-    },
-    {
-      "src": "/(.*)",
-      "dest": "index.js",
-      "headers": {
-        "Cache-Control": "s-maxage=86400"
+    ],
+    "routes": [
+      {
+        "src": "/(.*)",
+        "dest": "/"
       }
-    }
-  ]
-}
+    ]
+  }

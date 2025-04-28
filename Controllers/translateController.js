@@ -1,4 +1,4 @@
-const redisClient = require("../utils/radisClient");
+// const redisClient = require("../utils/radisClient");
 const savedTransModel = require("../modules/savedTransModel");
 const catchAsync = require("express-async-handler");
 const AppError = require("./../utils/appError");
@@ -79,29 +79,6 @@ exports.translateAndSave = catchAsync(async (req, res, next) => {
     return next(
       new AppError("Please provide word, srcLang , and targetLang 😃", 400)
     );
-  }
-
-  const hotCacheKey = `hotcache:translation:${word}:${srcLang}:${targetLang}`;
-  const warmCacheKey = `warmcache:translation:${word}:${srcLang}:${targetLang}`;
-  const coldCacheKey = `coldcache:translation:${word}:${srcLang}:${targetLang}`;
-
-  // 🕒 مراقبة وقت الحصول على الترجمة من الـ Cache
-  console.time("Cache Check");
-  const cachedTranslation = await getCachedTranslation(
-    hotCacheKey,
-    warmCacheKey,
-    coldCacheKey
-  );
-  console.timeEnd("Cache Check");
-
-  if (cachedTranslation) {
-    return res.status(200).json({
-      success: true,
-      data: {
-        ...cachedTranslation,
-        source: cachedTranslation.source || "cache",
-      },
-    });
   }
 
   // 🕒 مراقبة وقت الترجمة من Gemini
@@ -217,39 +194,6 @@ exports.translateAndSave = catchAsync(async (req, res, next) => {
     synonyms_src: translationData.synonyms_src,
     synonyms_target: translationData.synonyms_target,
   };
-
-  // 🕒 استخدام العمليات غير المتزامنة لتخزين البيانات في Redis
-  await Promise.all([
-    redisClient.set(
-      hotCacheKey,
-      JSON.stringify({
-        original: word,
-        translation,
-        ...dictionaryData,
-      }),
-      { EX: 3600 }
-    ),
-
-    redisClient.set(
-      warmCacheKey,
-      JSON.stringify({
-        original: word,
-        translation,
-        ...dictionaryData,
-      }),
-      { EX: 86400 }
-    ),
-
-    redisClient.set(
-      coldCacheKey,
-      JSON.stringify({
-        original: word,
-        translation,
-        ...dictionaryData,
-      }),
-      { EX: 604800 }
-    ),
-  ]);
 
   res.status(200).json({
     success: true,
