@@ -4,6 +4,7 @@ const User = require("../modules/userModel");
 const asyncHandler = require("express-async-handler");
 const jwt = require("jsonwebtoken");
 const AppError = require("./../utils/appError");
+const crypto = require("crypto");
 const Email = require("./../utils/email");
 
 const signToken = (id) => {
@@ -42,22 +43,76 @@ exports.signup = asyncHandler(async (req, res, next) => {
     role: req.body.role,
     dailyTranslations: req.body.dailyTranslations,
   });
-  createSendToken(newUser, 201, res);
-});
 
+  // 🔥 Generate verification token
+  const verifyToken = newUser.createEmailVerifyToken();
+  await newUser.save({ validateBeforeSave: false });
+
+  // 🔥 Prepare Verification URL
+  const verificationURL = `http://localhost:3000/api/v1/users/verify-email/${verifyToken}`;
+
+  const email = new Email(newUser, verificationURL);
+  await email.sendVerificationEmail();
+  createSendToken(newUser, 200, res);
+});
 /// Login /////
 exports.login = asyncHandler(async (req, res, next) => {
   const { email, password } = req.body;
 
-  //1)check if email and password are exist
+  // 1) Check if email and password exist
   if (!email || !password) {
-    return next(new AppError("please provide email and password", 401));
+    return next(new AppError("Please provide email and password.", 400));
   }
+
+  // 2) Check if user exists && password is correct
   const user = await User.findOne({ email }).select("+password");
+
   if (!user || !(await user.correctPassword(password, user.password))) {
-    return next(new AppError("Invalid email or password", 401));
+    return next(new AppError("Invalid email or password.", 401));
   }
+
+  // 3) Check if user is verified 🔔🔔🔔
+  if (!user.isEmailVerified) {
+    return next(
+      new AppError("Please verify your email before logging in.", 401)
+    );
+  }
+
+  // 4) Send token if everything is ok
   createSendToken(user, 200, res);
+});
+
+//  verifyEmail function 🔔🔔🔔
+exports.verifyEmail = asyncHandler(async (req, res, next) => {
+  const token = req.params.token;
+
+  if (!token) {
+    return next(new AppError("Token is missing.", 400));
+  }
+
+  const hashedToken = crypto.createHash("sha256").update(token).digest("hex");
+  console.log("Token received:", token);
+  console.log("Hashed token:", hashedToken);
+
+  const user = await User.findOne({
+    emailVerificationToken: hashedToken,
+    emailVerificationExpires: { $gt: Date.now() }, // لسه صالح
+  });
+
+  if (!user) {
+    return next(new AppError("Token is invalid or has expired.", 400));
+  }
+  console.log(user);
+
+  user.isEmailVerified = true;
+  user.emailVerificationToken = undefined;
+  user.emailVerificationExpires = undefined;
+  await user.save({ validateBeforeSave: false });
+
+  res.status(200).json({
+    status: "success",
+    message: "Email verified successfully!",
+  });
 });
 
 exports.logout = (req, res) => {
@@ -75,12 +130,13 @@ exports.logout = (req, res) => {
 /// Protect Routes /////
 exports.protectUserTranslate = asyncHandler(async (req, res, next) => {
   let token;
-  if (
-    req.headers.authorization &&
-    req.headers.authorization.startsWith("Bearer")
-  ) {
-    token = req.headers.authorization.split(" ")[1];
-  } else if (req.cookies.jwt) {
+  // if (
+  //   req.headers.authorization &&
+  //   req.headers.authorization.startsWith("Bearer")
+  // ) {
+  //   token = req.headers.authorization.split(" ")[1];
+  // }
+  if (req.cookies.jwt) {
     token = req.cookies.jwt;
   }
 
@@ -94,6 +150,15 @@ exports.protectUserTranslate = asyncHandler(async (req, res, next) => {
     if (!currentUser) {
       req.user = null;
       return next();
+    }
+    // ✅ New: Check if user verified email
+    if (!currentUser.isEmailVerified) {
+      return next(
+        new AppError(
+          "Please verify your email before accessing this route.",
+          403
+        )
+      );
     }
 
     if (currentUser.changedPasswordAfter(decoded.iat)) {
@@ -113,12 +178,13 @@ exports.protectUserTranslate = asyncHandler(async (req, res, next) => {
 
 exports.protect = asyncHandler(async (req, res, next) => {
   let token;
-  if (
-    req.headers.authorization &&
-    req.headers.authorization.startsWith("Bearer")
-  ) {
-    token = req.headers.authorization.split(" ")[1];
-  } else if (req.cookies.jwt) {
+  // if (
+  //   req.headers.authorization &&
+  //   req.headers.authorization.startsWith("Bearer")
+  // ) {
+  //   token = req.headers.authorization.split(" ")[1];
+  // }
+  if (req.cookies.jwt) {
     token = req.cookies.jwt;
   }
 
@@ -133,6 +199,15 @@ exports.protect = asyncHandler(async (req, res, next) => {
     if (!currentUser) {
       return next(
         new AppError("The user is belonging to token is no longer exists", 401)
+      );
+    }
+    // ✅ New: Check if user verified email
+    if (!currentUser.isEmailVerified) {
+      return next(
+        new AppError(
+          "Please verify your email before accessing this route.",
+          403
+        )
       );
     }
 

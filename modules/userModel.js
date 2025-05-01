@@ -52,6 +52,13 @@ const userSchema = new mongoose.Schema({
   premiumExpiresAt: Date,
   isActive: { type: Boolean, default: false },
   passwordChangedAt: Date,
+  /// Eamil Fields 🔔🔔⚠
+  isEmailVerified: {
+    type: Boolean,
+    default: false,
+  },
+  emailVerificationToken: String,
+  emailVerificationExpires: Date,
 });
 
 /// Hashing Password /
@@ -73,6 +80,20 @@ userSchema.methods.correctPassword = async function (
   userPassword
 ) {
   return await brcypt.compare(candidatePassword, userPassword);
+};
+
+/// Email Verification Token 🔔🔔
+userSchema.methods.createEmailVerifyToken = function () {
+  const verifyToken = crypto.randomBytes(32).toString("hex");
+
+  this.emailVerificationToken = crypto
+    .createHash("sha256")
+    .update(verifyToken)
+    .digest("hex");
+
+  this.emailVerificationExpires = Date.now() + 10 * 60 * 1000;
+
+  return verifyToken;
 };
 
 /// if user changed password after the token has issued ////////

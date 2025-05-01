@@ -26,7 +26,7 @@ const savedTransSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "User", // Reference to the User model
       required: true,
-      select: false,
+      select: true,
     },
     isFavorite: {
       type: Boolean,
@@ -39,6 +39,14 @@ const savedTransSchema = new mongoose.Schema(
   { timestamps: true }
 );
 savedTransSchema.index({ word: "text" });
+
+savedTransSchema.pre(/^find/, function (next) {
+  this.populate({
+    path: "userId",
+    select: "email",
+  });
+  next();
+});
 
 const savedTransModel = mongoose.model("savedTrans", savedTransSchema);
 
