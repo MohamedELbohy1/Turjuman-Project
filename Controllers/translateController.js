@@ -6,6 +6,7 @@ const User = require("./../modules/userModel");
 const mongoose = require("mongoose");
 // const translate = require("translate-google");
 const gemineiTranslate = require("../utils/geminiServce");
+const ApiFeatures = require("../utils/ApiFeatures");
 const session = require("express-session");
 
 const getCachedTranslation = async (hotKey, warmKey, coldKey) => {
@@ -301,11 +302,25 @@ exports.getUserTranslation = catchAsync(async (req, res, next) => {
 exports.getalltranslations = catchAsync(async (req, res, next) => {
   const translations = await savedTransModel.find().sort({ createdAt: -1 });
 
+  const allTranslations = translations.map((trans) => ({
+    id: trans.id,
+    originalText: trans.word,
+    translation: trans.translation,
+    srcLang: trans.srcLang,
+    targetLang: trans.targetLang,
+    isFavorite: trans.isFavorite,
+    userId: trans.userId,
+    createdAt: trans.createdAt,
+    definition: trans.definition,
+    synonyms_src: trans.synonyms_src,
+    synonyms_target: trans.synonyms_target,
+  }));
+
   res.status(200).json({
     status: "success",
     result: translations.length,
     data: {
-      translations,
+      allTranslations,
     },
   });
 });
@@ -541,33 +556,35 @@ exports.searchAndFilterTranslations = async (req, res) => {
 };
 
 ////    The Function above but this userTranslations is simple      /////
-exports.userTanslations = async (req, res) => {
-  try {
-    const {
-      word,
-      paragraph,
-      srcLang,
-      targetLang,
-      startDate,
-      endDate,
-      isFavorite,
-    } = req.query;
+exports.userTanslations = catchAsync(async (req, res) => {
+  const userId = req.user.id;
 
-    const query = { userId: req.user.id };
-    const translations = await savedTransModel
-      .find(query)
-      .sort({ createdAt: -1 }); // من الأحدث للأقدم
+  const features = new ApiFeatures(savedTransModel.find({ userId }), req.query)
+    .filter()
+    .sort()
+    .limitFields()
+    .pagination();
 
-    res.status(200).json({
-      status: "success",
-      results: translations.length,
-      data: translations,
-    });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ status: "error", message: "Server Error" });
-  }
-};
+  const savedTrans = await features.mongoesquery;
+
+  const translations = savedTrans.map((trans) => ({
+    id: trans.id,
+    isFavorite: trans.isFavorite,
+    original: trans.word,
+    translation: trans.translation,
+    srcLang: trans.srcLang,
+    targetLang: trans.targetLang,
+    definition: trans.definition,
+    synonyms_src: trans.synonyms_src,
+    synonyms_target: trans.synonyms_target,
+  }));
+
+  res.status(200).json({
+    status: "success",
+    count: translations.length,
+    data: translations,
+  });
+});
 
 exports.markAsFavoriteById = catchAsync(async (req, res, next) => {
   const { id } = req.params;
@@ -592,6 +609,32 @@ exports.markAsFavoriteById = catchAsync(async (req, res, next) => {
   res.status(200).json({
     success: true,
     message: "Translation marked as favorite ✅",
+    data: translation,
+  });
+});
+exports.deleteFavoriteById = catchAsync(async (req, res, next) => {
+  const { id } = req.params;
+  const userId = req.user.id;
+
+  const translation = await savedTransModel
+    .findOne({
+      _id: id,
+      userId,
+    })
+    .sort({ createdAt: -1 });
+
+  if (!translation) {
+    return next(
+      new AppError("Translation not found or you don't have permission.", 404)
+    );
+  }
+
+  translation.isFavorite = false;
+  await translation.save();
+
+  res.status(200).json({
+    success: true,
+    message: "Translation is deleted from favouriteList ",
     data: translation,
   });
 });

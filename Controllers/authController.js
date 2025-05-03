@@ -129,16 +129,9 @@ exports.logout = (req, res) => {
 
 /// Protect Routes /////
 exports.protectUserTranslate = asyncHandler(async (req, res, next) => {
-  let token;
-  // if (
-  //   req.headers.authorization &&
-  //   req.headers.authorization.startsWith("Bearer")
-  // ) {
-  //   token = req.headers.authorization.split(" ")[1];
-  // }
-  if (req.cookies.jwt) {
-    token = req.cookies.jwt;
-  }
+  const token = req.headers.authorization?.startsWith("Bearer")
+    ? req.headers.authorization.split(" ")[1]
+    : req.cookies?.jwt;
 
   if (!token) {
     req.user = null;
@@ -177,17 +170,10 @@ exports.protectUserTranslate = asyncHandler(async (req, res, next) => {
 });
 
 exports.protect = asyncHandler(async (req, res, next) => {
-  let token;
-  // if (
-  //   req.headers.authorization &&
-  //   req.headers.authorization.startsWith("Bearer")
-  // ) {
-  //   token = req.headers.authorization.split(" ")[1];
-  // }
-  if (req.cookies.jwt) {
-    token = req.cookies.jwt;
-  }
-
+  // 1️⃣ Get token from header or cookie
+  const token = req.headers.authorization?.startsWith("Bearer")
+    ? req.headers.authorization.split(" ")[1]
+    : req.cookies?.jwt;
   if (!token) {
     return next(
       new AppError("Your are not logged in , please login agin", 401)
