@@ -1,6 +1,7 @@
 const express = require("express");
 const authController = require("./../Controllers/authController");
 const translateController = require("./../Controllers/translateController");
+const cardController = require("./../Controllers/flashCardController");
 
 const router = express.Router();
 
@@ -22,7 +23,9 @@ router.get("/favorites/translates", translateController.getFavorites);
 router.get("/translations-History", translateController.getTranslationHistory);
 router.get("/favorite/:id", translateController.markAsFavoriteById);
 router.delete("/deletefavorite/:id", translateController.deleteFavoriteById);
-
+router.patch("/level/:id", cardController.ChooseDifficulty);
+router.get("/level/test/:id", cardController.HardTransMode);
+router.get("/flashcards/generate", cardController.generateFlashcards);
 router.get("/favoriteOrder", translateController.getSorting);
 router.get(
   "/translate/search",

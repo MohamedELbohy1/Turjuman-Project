@@ -85,7 +85,14 @@ exports.checkTranslationLimit = catchAsync(async (req, res, next) => {
 });
 
 exports.translateAndSave = catchAsync(async (req, res, next) => {
-  let { word, paragraph, srcLang, targetLang, isFavorite = false } = req.body;
+  let {
+    word,
+    paragraph,
+    srcLang,
+    targetLang,
+    level,
+    isFavorite = false,
+  } = req.body;
 
   if (!word || !srcLang || !targetLang) {
     return next(
@@ -104,7 +111,6 @@ exports.translateAndSave = catchAsync(async (req, res, next) => {
     warmCacheKey,
     coldCacheKey
   );
-  console.timeEnd("Cache Check");
 
   if (cachedTranslation) {
     return res.status(200).json({
@@ -116,15 +122,12 @@ exports.translateAndSave = catchAsync(async (req, res, next) => {
     });
   }
 
-  // 🕒 مراقبة وقت الترجمة من Gemini
-  console.time("Gemini Translate");
   const translationData = await gemineiTranslate(
     word,
     paragraph,
     srcLang,
     targetLang
   );
-  console.timeEnd("Gemini Translate");
 
   if (!translationData.success) {
     if (translationData.error && translationData.error.includes("quota")) {
@@ -208,11 +211,10 @@ exports.translateAndSave = catchAsync(async (req, res, next) => {
     });
   }
 
-  // 🕒 مراقبة وقت حفظ الترجمة في قاعدة البيانات
-  console.time("Database Save");
   const savedTrans = await savedTransModel.create({
     word,
     srcLang,
+    level,
     targetLang,
     translation,
     userId,
@@ -267,6 +269,7 @@ exports.translateAndSave = catchAsync(async (req, res, next) => {
     success: true,
     data: {
       original: word,
+      level: savedTrans.level,
       translation,
       ...dictionaryData,
       savedTranslation: savedTrans,
@@ -286,6 +289,7 @@ exports.getUserTranslation = catchAsync(async (req, res, next) => {
     id: trans._id,
     originalText: trans.word,
     translation: trans.translation,
+    level: trans.level,
     srcLang: trans.srcLang,
     targetLang: trans.targetLang,
     definition: trans.definition,

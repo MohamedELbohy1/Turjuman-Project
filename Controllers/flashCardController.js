@@ -1,0 +1,104 @@
+const savedTrans = require("../modules/savedTransModel");
+const catchAsync = require("express-async-handler");
+const { random } = require("../utils/geminiRandom");
+const AppError = require("../utils/appError");
+const Flashcard = require("../modules/flashCardModel");
+const { generateFlashcardsFromAI } = require("../utils/geminiGenerate");
+
+exports.ChooseDifficulty = catchAsync(async (req, res, next) => {
+  const userId = req.user.id;
+  const { id } = req.params;
+  const { level } = req.body;
+
+  const translation = await savedTrans.findOne({ userId, _id: id });
+
+  if (!translation) {
+    return next(new AppError("Translation Not found!", 404));
+  }
+  if (level === "easy") {
+    await savedTrans.deleteOne({ _id: id });
+  } else if (level === "hard") {
+    translation.level = "hard";
+    await translation.save();
+  }
+
+  res.status(200).json({
+    status: "success",
+    message: level === "easy" ? "Translations Deleted" : "Translatsion Kept",
+  });
+});
+
+exports.HardTransMode = catchAsync(async (req, res, next) => {
+  const userId = req.user.id;
+  const { id } = req.params;
+
+  const translation = await savedTrans.findOne({ userId, _id: id });
+
+  if (!translation) {
+    return next(
+      new AppError("There is no (hard) translation with this ID", 404)
+    );
+  }
+
+  const { word } = translation;
+  const example = await random(word);
+
+  res.status(200).json({
+    status: "success",
+    data: {
+      word,
+      example,
+    },
+  });
+});
+exports.generateFlashcards = async (req, res) => {
+  const translations = await savedTrans.find({ userId: req.user.id });
+  const words = translations.map((t) => t.word);
+
+  const flashcards = [];
+
+  // Flashcards Users
+  for (const item of translations) {
+    const flashcard = await Flashcard.create({
+      userId: req.user.id,
+      word: item.word,
+      translation: item.translation,
+      source: "user",
+      srcLang: item.srcLang,
+      targetLang: item.targetLang,
+      translateId: item._id,
+    });
+    flashcards.push(flashcard);
+  }
+
+  // Flashcards من AI
+  const aiGenerated = await generateFlashcardsFromAI(words.slice(0, 10));
+
+  for (const item of aiGenerated) {
+    const flashcard = await Flashcard.create({
+      userId: req.user.id,
+      word: item.word,
+      translation: item.translation,
+      srcLang: item.srcLang,
+      targetLang: item.targetLang,
+      source: "ai",
+    });
+    flashcards.push(flashcard);
+  }
+  // To Get The Level Field from SavedTransSchema
+  const allFlashcards = await Flashcard.find({ userId: req.user.id }).populate({
+    path: "translateId",
+    select: "level",
+  });
+
+  if (!flashcards.length) {
+    return next(new AppError("FlashCard generated Failed ", 404));
+  }
+
+  res.status(200).json({
+    status: "success",
+    message: "Flashcards generated Successeded ✅",
+    result: allFlashcards.length,
+    allData: allFlashcards,
+  });
+};
