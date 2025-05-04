@@ -5,7 +5,7 @@ const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
 async function generateFlashcardsFromAI(wordsArray) {
   const prompt = `
-Generate 8 English words that are related in meaning or topic to the following words:
+Generate 5 English words that are related in meaning or topic to the following words:
 "${wordsArray.join(", ")}".
 
 For each word, provide an Arabic translation in the following JSON format:

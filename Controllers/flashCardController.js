@@ -51,54 +51,71 @@ exports.HardTransMode = catchAsync(async (req, res, next) => {
     },
   });
 });
-exports.generateFlashcards = async (req, res) => {
-  const translations = await savedTrans.find({ userId: req.user.id });
+
+/// FlashCard Function 📝📝
+exports.generateFlashcards = async (req, res, next) => {
+  const userId = req.user.id;
+
+  //1) Get Translation That User Translate
+  const translations = await savedTrans.find({ userId });
   const words = translations.map((t) => t.word);
 
-  const flashcards = [];
+  //2) To Confirm That Translartion not repeated again
+  const existingFlashcards = await Flashcard.find({ userId });
+  const existingWords = new Set(existingFlashcards.map((f) => f.word));
 
-  // Flashcards Users
+  //3) Added The Words in FlashCard
+  const newUserWords = [];
+  const newFlashcards = [];
+
   for (const item of translations) {
-    const flashcard = await Flashcard.create({
-      userId: req.user.id,
-      word: item.word,
-      translation: item.translation,
-      source: "user",
-      srcLang: item.srcLang,
-      targetLang: item.targetLang,
-      translateId: item._id,
-    });
-    flashcards.push(flashcard);
+    if (!existingWords.has(item.word)) {
+      const flashcard = await Flashcard.create({
+        userId,
+        word: item.word,
+        translation: item.translation,
+        source: "user",
+        srcLang: item.srcLang,
+        targetLang: item.targetLang,
+        translateId: item._id,
+      });
+      newFlashcards.push(flashcard);
+      newUserWords.push(item.word);
+      existingWords.add(item.word);
+    }
   }
 
-  // Flashcards من AI
-  const aiGenerated = await generateFlashcardsFromAI(words.slice(0, 10));
+  if (newUserWords.length > 0) {
+    //4) After Generate 5 words ... Every word that added in flashCard,Ai generate 3 Words about this word
+    const aiGenerated = await generateFlashcardsFromAI(newUserWords, 3);
 
-  for (const item of aiGenerated) {
-    const flashcard = await Flashcard.create({
-      userId: req.user.id,
-      word: item.word,
-      translation: item.translation,
-      srcLang: item.srcLang,
-      targetLang: item.targetLang,
-      source: "ai",
-    });
-    flashcards.push(flashcard);
+    for (const item of aiGenerated) {
+      if (!existingWords.has(item.word)) {
+        const flashcard = await Flashcard.create({
+          userId,
+          word: item.word,
+          translation: item.translation,
+          srcLang: item.srcLang,
+          targetLang: item.targetLang,
+          source: "ai",
+        });
+        newFlashcards.push(flashcard);
+        existingWords.add(item.word);
+      }
+    }
   }
-  // To Get The Level Field from SavedTransSchema
-  const allFlashcards = await Flashcard.find({ userId: req.user.id }).populate({
+
+  // 5) All Words have the Level that populate from SavedTranslarteSchema
+  const allFlashcards = await Flashcard.find({ userId }).populate({
     path: "translateId",
     select: "level",
   });
 
-  if (!flashcards.length) {
-    return next(new AppError("FlashCard generated Failed ", 404));
-  }
-
   res.status(200).json({
     status: "success",
-    message: "Flashcards generated Successeded ✅",
-    result: allFlashcards.length,
-    allData: allFlashcards,
+    message: "Flashcards generated successfully ✅",
+    added: newFlashcards.length,
+    total: allFlashcards.length,
+    flashcards: allFlashcards,
   });
 };

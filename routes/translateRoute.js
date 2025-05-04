@@ -25,6 +25,7 @@ router.get("/favorite/:id", translateController.markAsFavoriteById);
 router.delete("/deletefavorite/:id", translateController.deleteFavoriteById);
 router.patch("/level/:id", cardController.ChooseDifficulty);
 router.get("/level/test/:id", cardController.HardTransMode);
+//FlashCard Route 📝📝
 router.get("/flashcards/generate", cardController.generateFlashcards);
 router.get("/favoriteOrder", translateController.getSorting);
 router.get(
