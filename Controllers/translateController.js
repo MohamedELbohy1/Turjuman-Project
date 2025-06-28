@@ -6,6 +6,8 @@ const User = require("./../modules/userModel");
 const mongoose = require("mongoose");
 // const translate = require("translate-google");
 const gemineiTranslate = require("../utils/geminiServce");
+const translateWordExternally = require("../utils/modelSerivce");
+const ocrTranslateImage = require("../utils/ocrSerivce");
 const ApiFeatures = require("../utils/ApiFeatures");
 const session = require("express-session");
 
@@ -87,7 +89,7 @@ exports.checkTranslationLimit = catchAsync(async (req, res, next) => {
 exports.translateAndSave = catchAsync(async (req, res, next) => {
   let {
     word,
-    paragraph,
+    context,
     srcLang,
     targetLang,
     level,
@@ -104,7 +106,6 @@ exports.translateAndSave = catchAsync(async (req, res, next) => {
   const warmCacheKey = `warmcache:translation:${word}:${srcLang}:${targetLang}`;
   const coldCacheKey = `coldcache:translation:${word}:${srcLang}:${targetLang}`;
 
-  // 🕒 مراقبة وقت الحصول على الترجمة من الـ Cache
   console.time("Cache Check");
   const cachedTranslation = await getCachedTranslation(
     hotCacheKey,
@@ -122,33 +123,29 @@ exports.translateAndSave = catchAsync(async (req, res, next) => {
     });
   }
 
-  const translationData = await gemineiTranslate(
+  const translationData = await translateWordExternally(
     word,
-    paragraph,
+    context,
     srcLang,
     targetLang
   );
 
-  if (!translationData.success) {
-    if (translationData.error && translationData.error.includes("quota")) {
-      return res.status(503).json({
-        success: false,
-        message:
-          "⚠️ Translation service is temporarily unavailable due to rate limits. Please try again in a minute.",
-        error: translationData.error,
-        fallback: true,
-        details: translationData,
-      });
-    }
+  /////////// التعديل يتاع المودل عشان كان بيعارض معااااه
+  let result = translationData;
 
+  if (translationData.success === false && translationData.details) {
+    result = translationData.details;
+  }
+
+  if (!result.translation || !result.definition) {
     return res.status(500).json({
       success: false,
-      message: translationData.error || "❌ Can't find a proper translation",
+      message: translationData.message || "❌ Can't find a proper translation",
       details: translationData,
     });
   }
 
-  const translation = translationData.translation;
+  const translation = result.translation;
   const userId = req.user ? req.user.id : null;
 
   const GUEST_TRANSLATION_LIMIT = process.env.GUEST_LIMIT || 2;
@@ -205,32 +202,31 @@ exports.translateAndSave = catchAsync(async (req, res, next) => {
         isFavorite: existingTranslation.isFavorite,
         definition: translationData.definition,
         examples: translationData.examples,
-        synonyms_src: translationData.synonyms_src,
-        synonyms_target: translationData.synonyms_target,
+        synonyms_src: translationData.synonymsSrc,
+        synonyms_target: translationData.synonymsTarget,
       },
     });
   }
 
+  const dictionaryData = {
+    definition: result.definition,
+    examples: result.examples,
+    synonyms_src: result.synonymsSrc,
+    synonyms_target: result.synonymsTarget,
+  };
+
   const savedTrans = await savedTransModel.create({
     word,
     srcLang,
-    level,
     targetLang,
     translation,
     userId,
     isFavorite,
-    definition: translationData.definition,
-    synonyms_src: translationData.synonyms_src,
-    synonyms_target: translationData.synonyms_target,
+    examples: dictionaryData.examples,
+    definition: dictionaryData.definition,
+    synonyms_src: dictionaryData.synonyms_src,
+    synonyms_target: dictionaryData.synonyms_target,
   });
-  console.timeEnd("Database Save");
-
-  const dictionaryData = {
-    definition: translationData.definition,
-    examples: translationData.examples,
-    synonyms_src: translationData.synonyms_src,
-    synonyms_target: translationData.synonyms_target,
-  };
 
   // 🕒 استخدام العمليات غير المتزامنة لتخزين البيانات في Redis
   await Promise.all([
@@ -640,5 +636,38 @@ exports.deleteFavoriteById = catchAsync(async (req, res, next) => {
     success: true,
     message: "Translation is deleted from favouriteList ",
     data: translation,
+  });
+});
+
+//// OCR Translations : Translate files
+exports.ocrTranslateImage = catchAsync(async (req, res, next) => {
+  if (!req.file) {
+    return next(new AppError("No image file provided", 400));
+  }
+
+  const imageBuffer = req.file.buffer;
+  const srcLang = req.body.srcLang;
+  const targetLang = req.body.targetLang;
+  console.log("Source Lang:", srcLang);
+  console.log("Target Lang:", targetLang);
+
+  if (srcLang === targetLang) {
+    return next(
+      new AppError("Source and target languages cannot be the same", 400)
+    );
+  }
+
+  const result = await ocrTranslateImage(imageBuffer, srcLang, targetLang);
+
+  if (!result || !result.translation) {
+    return next(new AppError("Failed to translate image text", 500));
+  }
+
+  res.status(200).json({
+    success: true,
+    data: {
+      original_text: result.originalText,
+      translated_text: result.translation,
+    },
   });
 });

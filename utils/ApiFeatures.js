@@ -35,7 +35,7 @@ class APIfeatures {
       const fields = this.queryString.fields.split(",").join(" ");
       this.mongoesquery = this.mongoesquery.select(fields);
     } else {
-      this.mongoesquery = this.mongoesquery.select("-__v");
+      // this.mongoesquery = this.mongoesquery.select("-__v");
     }
     return this;
   }
@@ -63,6 +63,12 @@ class APIfeatures {
     this.paginationResult = pagination;
 
     return this;
+  }
+  async getTotalCount() {
+    if (this.totalCountPromise) {
+      this.totalCount = await this.totalCountPromise;
+    }
+    return this.totalCount;
   }
 }
 

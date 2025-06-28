@@ -2,6 +2,8 @@ const express = require("express");
 const authController = require("./../Controllers/authController");
 const translateController = require("./../Controllers/translateController");
 const cardController = require("./../Controllers/flashCardController");
+const multer = require("multer");
+const upload = multer({ storage: multer.memoryStorage() });
 
 const router = express.Router();
 
@@ -25,6 +27,11 @@ router.get("/favorite/:id", translateController.markAsFavoriteById);
 router.delete("/deletefavorite/:id", translateController.deleteFavoriteById);
 router.patch("/level/:id", cardController.ChooseDifficulty);
 router.get("/level/test/:id", cardController.HardTransMode);
+router.post(
+  "/ocr-translate",
+  upload.single("file"),
+  translateController.ocrTranslateImage
+);
 //FlashCard Route 📝📝
 router.get("/flashcards/generate", cardController.generateFlashcards);
 router.get("/favoriteOrder", translateController.getSorting);

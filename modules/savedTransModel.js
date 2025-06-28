@@ -35,6 +35,10 @@ const savedTransSchema = new mongoose.Schema(
     definition: String,
     synonyms_src: [String],
     synonyms_target: [String],
+    examples: {
+      type: [String],
+      default: [],
+    },
     level: {
       type: String,
       default: "Medium",
