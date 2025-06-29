@@ -6,6 +6,9 @@ async function translateWordExternally(
   srcLang = "english",
   targetLang = "arabic"
 ) {
+  if (!context || context.trim() === "") {
+    context = word;
+  }
   try {
     const res = await axios.post(
       "https://turjumanmainfeature-production.up.railway.app/translate",
@@ -23,29 +26,32 @@ async function translateWordExternally(
     );
 
     const data = res.data;
-    console.log("🔍 Raw response:", data);
+    if (data.status === "Error") {
+      throw new Error(`Translation failed: ${data.message}`);
+    }
 
     const result = data.success === false && data.details ? data.details : data;
 
-    const examples =
-      result.examples || (result.example_usage ? [result.example_usage] : []);
+    const examples = Array.isArray(result.examples)
+      ? result.examples
+      : result.example_usage
+        ? [result.example_usage]
+        : [];
 
-    if (
-      !result.translated_word ||
-      !result.definition ||
-      examples.length === 0
-    ) {
+    const translation = result.translation || result.translated_word || "";
+    const definition = result.definition || "";
+    if (!translation || !definition || examples.length === 0) {
       console.log("⚠️ Incomplete result:", result);
       throw new Error("Translation failed - missing fields");
     }
 
     return {
-      word: result.word || word,
-      translation: result.translated_word,
-      definition: result.definition,
-      examples: examples,
-      synonymsSrc: result.synonymsSrc || result.source_synonyms || [],
-      synonymsTarget: result.synonymsTarget || result.target_synonyms || [],
+      original: result.word || word,
+      translation,
+      definition,
+      examples,
+      synonyms_src: result.synonyms_src || result.source_synonyms || [],
+      synonyms_target: result.synonyms_target || result.target_synonyms || [],
     };
   } catch (err) {
     console.error("❌ Final catch error:", err.message);

@@ -77,6 +77,7 @@ exports.generateFlashcards = async (req, res, next) => {
         word: item.word,
         translation: item.translation,
         source: "user",
+        isFavorite: item.isFavorite,
         srcLang: item.srcLang,
         targetLang: item.targetLang,
         translateId: item._id,
@@ -106,8 +107,8 @@ exports.generateFlashcards = async (req, res, next) => {
           source: "ai",
           definition: item.definition,
           examples: item.examples,
-          synonymsSrc: item.synonymsSrc,
-          synonymsTarget: item.synonymsTarget,
+          synonymsSrc: item.synonyms_src,
+          synonymsTarget: item.synonyms_target,
         });
         newFlashCards.push(flashcard);
         existingWords.add(item.word);
@@ -115,41 +116,33 @@ exports.generateFlashcards = async (req, res, next) => {
     }
   }
 
-  const features = new APIfeatures(
-    FlashCard.find({ userId }).select(
-      "word translation srcLang targetLang source definition examples synonymsSrc synonymsTarget translateId"
-    ),
-    req.query
-  )
-    .filter()
-    .sort()
-    .limitFields()
-    .pagination();
-
-  const allFlashcards = await features.mongoesquery.populate({
-    path: "translateId",
-    select: "level",
-  });
-
-  const total = await features.getTotalCount();
+  const allFlashcards = await savedTrans
+    .find({ userId })
+    .populate({
+      path: "translateId",
+      select: "level _id",
+    })
+    .sort({ createdAt: -1 });
 
   res.status(200).json({
     status: "success",
     message: "Flashcards generated successfully ✅",
     added: newFlashCards.length,
-    total,
-    pagination: features.paginationResult,
+    total: allFlashcards.length,
     flashcards: allFlashcards.map((card) => ({
+      userId,
+      translateId: card._id,
       word: card.word,
       translation: card.translation,
-      level: card.translateId?.level || null,
+      isFavorite: card.isFavorite,
+      level: card.level || null,
       srcLang: card.srcLang,
       targetLang: card.targetLang,
       source: card.source,
       definition: card.definition,
       examples: card.examples,
-      synonymsSrc: card.synonymsSrc,
-      synonymsTarget: card.synonymsTarget,
+      synonymsSrc: card.synonyms_src,
+      synonymsTarget: card.synonyms_target,
     })),
   });
 };

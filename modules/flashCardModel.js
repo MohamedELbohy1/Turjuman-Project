@@ -32,6 +32,10 @@ const flashcardSchema = new mongoose.Schema({
     enum: ["user", "ai"],
     default: "user",
   },
+  isFavorite: {
+    type: Boolean,
+    default: false,
+  },
   definition: {
     type: String,
   },
@@ -39,11 +43,11 @@ const flashcardSchema = new mongoose.Schema({
     type: [String],
     default: [],
   },
-  synonymsSrc: {
+  synonyms_src: {
     type: [String],
     default: [],
   },
-  synonymsTarget: {
+  synonyms_target: {
     type: [String],
     default: [],
   },

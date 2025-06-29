@@ -202,8 +202,8 @@ exports.translateAndSave = catchAsync(async (req, res, next) => {
         isFavorite: existingTranslation.isFavorite,
         definition: translationData.definition,
         examples: translationData.examples,
-        synonyms_src: translationData.synonymsSrc,
-        synonyms_target: translationData.synonymsTarget,
+        synonyms_src: translationData.synonyms_src,
+        synonyms_target: translationData.synonyms_target,
       },
     });
   }
@@ -211,8 +211,8 @@ exports.translateAndSave = catchAsync(async (req, res, next) => {
   const dictionaryData = {
     definition: result.definition,
     examples: result.examples,
-    synonyms_src: result.synonymsSrc,
-    synonyms_target: result.synonymsTarget,
+    synonyms_src: result.synonyms_src,
+    synonyms_target: result.synonyms_target,
   };
 
   const savedTrans = await savedTransModel.create({
@@ -289,8 +289,9 @@ exports.getUserTranslation = catchAsync(async (req, res, next) => {
     srcLang: trans.srcLang,
     targetLang: trans.targetLang,
     definition: trans.definition,
-    synonyms_src: trans.synonyms_src,
-    synonyms_target: trans.synonyms_target,
+    examples: trans.examples,
+    synonymsSrc: trans.synonymsSrc,
+    synonymsTarget: trans.synonymsTarget,
   }));
 
   res.status(200).json({
